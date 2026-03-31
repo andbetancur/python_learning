@@ -1,0 +1,4 @@
+This is your first note
+You are learning file handling in Python
+
+This is an append note
