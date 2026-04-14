@@ -1,0 +1,120 @@
+name: Deploy Cloud Schedulers
+
+on:
+  push:
+    branches: [main, dev]
+    # se dispara al mergear a main (producción) o a dev (desarrollo)
+    paths:
+      - 'github_project/schedulers/*.yaml'
+      # solo si cambió algún YAML en schedulers/
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "PROJECT_ID=reboost-moon-1" >> $GITHUB_ENV
+            echo "SA_EMAIL=github-etl-sa@reboost-moon-1.iam.gserviceaccount.com" >> $GITHUB_ENV
+            echo "IMAGE=us-central1-docker.pkg.dev/reboost-moon-1/github-etl/github-etl:latest" >> $GITHUB_ENV
+          else
+            echo "PROJECT_ID=vitrinasemp1" >> $GITHUB_ENV
+            echo "SA_EMAIL=github-etl-sa@vitrinasemp1.iam.gserviceaccount.com" >> $GITHUB_ENV
+            echo "IMAGE=us-central1-docker.pkg.dev/vitrinasemp1/github-etl/github-etl:latest" >> $GITHUB_ENV
+          fi
+        # detecta la rama que disparó el workflow y setea las variables del entorno correcto
+        # >> $GITHUB_ENV → forma estándar de setear variables de entorno en GitHub Actions
+        # las variables seteadas aquí están disponibles en todos los pasos siguientes
+
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ github.ref_name == 'main' && secrets.GCP_SA_KEY_PROD || secrets.GCP_SA_KEY_DEV }}
+          # expresión ternaria de GitHub Actions:
+          # si la rama es main → usa el secreto de producción
+          # si es dev → usa el secreto de desarrollo
+          # los secretos se configuran en: Settings → Secrets → Actions:
+          #   GCP_SA_KEY_PROD → JSON de la SA del proyecto reboost-moon-1
+          #   GCP_SA_KEY_DEV  → JSON de la SA del proyecto vitrinasemp1
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        # instala y configura el CLI de gcloud autenticado con las credenciales del paso anterior
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+        # yq para leer los valores de los archivos YAML desde bash
+
+      - name: Deploy schedulers
+        run: |
+          for config_file in github_project/schedulers/*.yaml; do
+          # itera sobre cada YAML — procesa todos para garantizar consistencia
+
+            SCHEDULER_NAME=$(yq '.scheduler_name' $config_file)
+            JOB_NAME=$(yq '.cloud_run_job' $config_file)
+            SCHEDULE=$(yq '.schedule' $config_file)
+            TIMEZONE=$(yq '.timezone' $config_file)
+            MODE=$(yq '.mode' $config_file)
+            REGION=$(yq '.region' $config_file)
+            MEMORY=$(yq '.memory' $config_file)
+            TIMEOUT=$(yq '.timeout' $config_file)
+            MAX_RETRIES=$(yq '.max_retries' $config_file)
+            # extrae cada valor del YAML — PROJECT_ID, SA_EMAIL e IMAGE
+            # vienen del paso "Set environment variables" según la rama
+
+            if gcloud run jobs describe $JOB_NAME --region=$REGION --project=$PROJECT_ID 2>/dev/null; then
+              gcloud run jobs update $JOB_NAME \
+                --image=$IMAGE \
+                --region=$REGION \
+                --project=$PROJECT_ID \
+                --service-account=$SA_EMAIL \
+                --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID \
+                --memory=$MEMORY \
+                --timeout=$TIMEOUT \
+                --max-retries=$MAX_RETRIES
+            else
+              gcloud run jobs create $JOB_NAME \
+                --image=$IMAGE \
+                --region=$REGION \
+                --project=$PROJECT_ID \
+                --service-account=$SA_EMAIL \
+                --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID \
+                --memory=$MEMORY \
+                --timeout=$TIMEOUT \
+                --max-retries=$MAX_RETRIES
+            fi
+            # si el Cloud Run Job ya existe lo actualiza, si no lo crea
+
+            if gcloud scheduler jobs describe $SCHEDULER_NAME --location=$REGION --project=$PROJECT_ID 2>/dev/null; then
+              gcloud scheduler jobs update http $SCHEDULER_NAME \
+                --location=$REGION \
+                --schedule="$SCHEDULE" \
+                --time-zone=$TIMEZONE \
+                --uri="https://$REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/$PROJECT_ID/jobs/$JOB_NAME:run" \
+                --message-body="{\"overrides\": {\"containerOverrides\": [{\"args\": [\"--mode\", \"$MODE\"]}]}}" \
+                --oauth-service-account-email=$SA_EMAIL \
+                --headers="Content-Type=application/json" \
+                --project=$PROJECT_ID
+            else
+              gcloud scheduler jobs create http $SCHEDULER_NAME \
+                --location=$REGION \
+                --schedule="$SCHEDULE" \
+                --time-zone=$TIMEZONE \
+                --uri="https://$REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/$PROJECT_ID/jobs/$JOB_NAME:run" \
+                --message-body="{\"overrides\": {\"containerOverrides\": [{\"args\": [\"--mode\", \"$MODE\"]}]}}" \
+                --oauth-service-account-email=$SA_EMAIL \
+                --headers="Content-Type=application/json" \
+                --project=$PROJECT_ID
+            fi
+            # si el Cloud Scheduler ya existe lo actualiza, si no lo crea
+
+            echo "✓ [${{ github.ref_name }}] Desplegado: $SCHEDULER_NAME en $PROJECT_ID"
+            # confirma qué se desplegó y en qué entorno
+          done

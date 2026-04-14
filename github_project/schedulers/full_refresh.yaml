@@ -1,0 +1,27 @@
+scheduler_name: github-etl-full-refresh
+# nombre del job en Cloud Scheduler — debe ser único en el proyecto
+
+cloud_run_job: github-etl-full
+# nombre del Cloud Run Job que se crea y ejecuta
+
+schedule: "0 2 * * 0"
+# cron: cada domingo a las 2am UTC
+# formato: minuto hora día-mes mes día-semana
+
+timezone: UTC
+# zona horaria del cron — UTC es estándar en data engineering
+
+mode: full
+# argumento que se pasa a main.py: python main.py --mode full
+
+region: us-central1
+# región GCP donde viven el Job y el Scheduler — deben coincidir
+
+memory: 1Gi
+# memoria del Cloud Run Job — full refresh procesa todos los repos
+
+timeout: 3600
+# timeout en segundos — 1 hora máxima para el full refresh
+
+max_retries: 1
+# reintentos si el job falla — 1 reintento porque el full es costoso
