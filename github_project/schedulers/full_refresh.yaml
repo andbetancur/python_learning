@@ -24,4 +24,4 @@ timeout: 3600
 # timeout en segundos — 1 hora máxima para el full refresh
 
 max_retries: 1
-# reintentos si el job falla — 1 reintento porque el full es costoso
+# reintentos si el job falla — 1 reintento porque el full refresh es costoso
