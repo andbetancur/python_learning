@@ -1,0 +1,24 @@
+scheduler_name: github-etl-incremental
+# nombre del job en Cloud Scheduler
+
+cloud_run_job: github-etl-incremental
+# nombre del Cloud Run Job — separado del full para poder correrlos independientemente
+
+schedule: "0 6 * * *"
+# cron: todos los días a las 6am UTC
+
+timezone: UTC
+
+mode: incremental
+# argumento que se pasa a main.py: python main.py --mode incremental
+
+region: us-central1
+
+memory: 512Mi
+# incremental procesa menos datos que el full — 512MB es suficiente
+
+timeout: 1800
+# 30 minutos máximos — el incremental es más rápido
+
+max_retries: 2
+# el incremental usa MERGE — es idempotente, podemos reintentar sin duplicar datos
