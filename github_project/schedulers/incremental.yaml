@@ -4,8 +4,8 @@ scheduler_name: github-etl-incremental
 cloud_run_job: github-etl-incremental
 # nombre del Cloud Run Job — separado del full para poder correrlos independientemente
 
-schedule: "0 6 * * *"
-# cron: todos los días a las 6am UTC
+schedule: "0 7 * * *"
+# cron: todos los días a las 7am UTC
 
 timezone: UTC
 
