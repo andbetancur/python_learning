@@ -7,6 +7,9 @@ on:
     paths:
       - 'github_project/schedulers/*.yaml'
       # solo si cambió algún YAML en schedulers/
+  workflow_dispatch:
+    # permite correr el workflow manualmente desde GitHub Actions
+    # útil para forzar un deploy sin necesidad de modificar un archivo
 
 jobs:
   deploy:
