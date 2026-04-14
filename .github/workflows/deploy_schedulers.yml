@@ -77,7 +77,7 @@ jobs:
                 --service-account=$SA_EMAIL \
                 --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID \
                 --memory=$MEMORY \
-                --timeout=$TIMEOUT \
+                --task-timeout=$TIMEOUT \
                 --max-retries=$MAX_RETRIES
             else
               gcloud run jobs create $JOB_NAME \
@@ -87,7 +87,7 @@ jobs:
                 --service-account=$SA_EMAIL \
                 --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID \
                 --memory=$MEMORY \
-                --timeout=$TIMEOUT \
+                --task-timeout=$TIMEOUT \
                 --max-retries=$MAX_RETRIES
             fi
             # si el Cloud Run Job ya existe lo actualiza, si no lo crea
